@@ -93,6 +93,74 @@ def add_to_list(json_text:json,category:str):
 
     return dict_p_text
 
+def run_prompt(p_txt:str,p_context:str,category:str="NA"):
+     #Creare a blank dictionary
+    logger.info("====== run_prompt - START")
+    blank_dict = '{}'
+
+   
+    generic_template = ""
+    complete_prompt:PromptTemplate = None
+ 
+    generic_template = """ You are an expert Trade Finance Analyst.Handle any typos in text. Answer below question based on the provided context :\n\n  {prompt_context} .\n\n  {prompt_txt}\n \n . Return response as JSON."""
+    template_dns = PromptTemplate( input_variables=["prompt_context","prompt_txt"], template = generic_template)
+    complete_prompt = template_dns.format(prompt_context=p_context,prompt_txt=p_txt)
+
+    logger.info(complete_prompt)
+
+    llm_ollama = ChatOllama(
+        model="phi4:14b",
+        base_url="https://ollama-route-v3-v-sharp.apps.clusterocpvirtoci.ocpociibm.com/",
+        temperature=0.2,
+        streaming=False  # 🔒 ensures response is complete, not streamed    
+    )
+        
+    generated_response = llm_ollama.invoke(complete_prompt)
+    logger.info(f" LLM Response : {generated_response} ")
+
+    prohibitions = ["sanction","boycott"]
+    category = category.lower()
+
+    if generated_response:
+        if category in prohibitions:
+            response_json = filter_response(generated_response,"[", "]")
+            dict_ptext = add_to_list(response_json,category)
+            response_j1 = dict_ptext
+        else: 
+            response_json = filter_response(generated_response,"{", "}")
+            response_j1  = json.loads(response_json)
+
+       
+        logger.debug(f" Json loaded Type { type(response_j1)} ")
+
+        response_json  = response_j1
+        print(f" Formatted JSON : {response_json}")   
+        response_json = json.dumps(response_json,indent=4)    
+        
+    return response_json
+
+def add_to_list(json_text:json,category:str):
+
+    print(f" add to list : {json_text}")
+
+    prohibitions = ["sanction","boycott"]
+    response_j = json.loads(json_text)
+    list_ptext = []
+    dict_p_text = {}
+    if category in prohibitions:
+        response_json = [record for record in response_j if record["category"].lower() == category ] 
+        for entry in response_json:
+            print(f"entry :  {entry}")
+            list_ptext.append(entry["prohibition_text"])
+        dict_p_text["category"]  = category
+        dict_p_text["prohibition_text"] = list_ptext
+
+
+
+    print(f"Returning {dict_p_text}")
+
+    return dict_p_text
+
 
 def filter_response(raw_response_json, startch, endch):
     raw_response_json = raw_response_json.strip()
