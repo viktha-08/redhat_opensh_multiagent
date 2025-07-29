@@ -58,7 +58,7 @@ def parse_input_with_header_and_body(input_data):
     lc_data_val_arr = []
 
     #decode input data
-    input_data_enc = input_data #.decode('utf-8')
+    input_data_enc = input_data#decode('utf-8')
 
     #print(f"input_data_enc : {input_data_enc}")
 
@@ -67,10 +67,10 @@ def parse_input_with_header_and_body(input_data):
     in_body = False
 
     input_lines = input_data_enc.split("\n")
-    #print(f"INPUT LINES : {input_lines}")
+    print(f"INPUT LINES : {input_lines}")
 
     for line in input_lines:
-        #print(f" LINE  =        : {line}")
+        print(f" LINE  =        : {line}")
         if not(isinstance(line,int)) :
         #line = " ".join(line.split())
             line = line.replace("\u2013", "-")
@@ -142,6 +142,8 @@ def process_input(input_data):
     logger.info("process_input() : START ")
     logger.info(f" input data : {input_data}")
     parsed_data_dict = parse_input_with_header_and_body(input_data)
+
+    print(f"Parsed {parsed_data_dict}")
         
     parsed_data_keys = parsed_data_dict.get('keys')
     parsed_data_vals = parsed_data_dict.get('vals')
@@ -277,6 +279,7 @@ def process_input(input_data):
         final_out["LCAdditionalCondition"] = vLCAddlCond
         
     logger.info("process_input() : END ")
+    print(f"Converted to JSON : {final_out}")
 
     return final_out
 
