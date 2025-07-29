@@ -10,10 +10,34 @@ from logger_config import logger
 # langchain libraries
 from langchain_core.messages.ai import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
-from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama , OllamaLLM
 from langgraph.graph import StateGraph, END
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.tools import tool
+import requests
+
+def call_baoe_service(lc_json,category):
+    url = ""
+    if "boycott" == category.lower():
+        url = "http://tf-boycott-service-v-sharp.apps.clusterocpvirtoci.ocpociibm.com/api/boycott/evaluate"
+    else:
+        url = "http://tf-sanction-service-v-sharp.apps.clusterocpvirtoci.ocpociibm.com/api/boycott/evaluate"
+
+    # Headers (you can add Content-Type, Authorization, etc.)
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    # Make the POST request
+    response = requests.post(
+        url,
+        json=lc_json,
+        headers=headers)
+    
+    print(response)
+    
+    return response
+
 
 def tag_prohibitions(p_context:str,category:str="NA"):
      #Creare a blank dictionary
@@ -26,8 +50,8 @@ def tag_prohibitions(p_context:str,category:str="NA"):
     generic_template = """ You are an expert Trade Finance Analyst.Handle any typos in text. Answer below question based on the provided context :\n\n  {prompt_context} .\n\n  {prompt_txt}\n \n . Return response as JSON."""
     template_dns = PromptTemplate( input_variables=["prompt_context","prompt_txt"], template = generic_template)
     complete_prompt = template_dns.format(prompt_context=p_context,prompt_txt=p_txt)
-    os.environ["MISTRAL_API_KEY"] = "JqJcewB7KvWFBwICdD66WWPbC1JZfjnZ"
-    llm_ollama = ChatOllama(
+
+    llm_ollama = OllamaLLM(
         model="phi4:14b",
         base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434/api/generate",
         temperature=0.2,
@@ -70,7 +94,7 @@ def tag_prohibitions(p_context:str,category:str="NA"):
     return response_json
 
 def add_to_list(json_text:json,category:str):
-    json_text = """[{"category": "Boycott", "prohibition_text": "SHIPMENT AND TRANSHIPMENT ON ISRAELI FLAG VESSEL / AIR CRAFT, SEA PORTS / AIRPORT IS NOT ALLOWED AND A CERTIFICATE ISSUED BY THE SHIPPING COMPANY OR THEIR AUTHORISE AGENT TO THIS EFFECT MUST ACCOMPANY THE ORIGINAL DOCUMENTS"}, {"category": "Boycott", "prohibition_text": "SHIPMENT THROUGH ISRAELI FLAG VESSEL IS PROHIBITED"}, {"category": "Sanction", "prohibition_text": "IBM INDIA BANK COMPLIES WITH THE INTERNATIONAL SANCTION LAWS, RESOLUTIONS AND REGULATIONS ISSUED BY THE EUROPEAN UNION, THE UNITED NATIONS AND THE UNITED STATES OF AMERICA (AS WELL AS LOCAL LAWS AND REGULATIONS GOVERNING THE ISSUING BANK). IT IS BANK POLICY TO UNDERTAKE NO OBLIGATION, UNLESS IBM INDIA BANK HAS PROVIDED ITS EXPLICIT APPROVAL PRIOR TO COMMENCEMENT OF SUCH TRANSACTION, TO MAKE ANY PAYMENT UNDER, OR OTHERWISE TO IMPLEMENT, THIS LETTER OF CREDIT (INCLUDING BUT NOT LIMITED TO PROCESSING DOCUMENTS OR ADVISING THE LETTER OF CREDIT), IF THERE IS INVOLVEMENT BY ANY PERSON, ENTITY OR BODY LISTED IN THE EU, UN, USA OR LOCAL SANCTIONS LISTS GOVERNING THE ISSUING BANK, OR ANY INVOLVEMENT BY OR NEXUS WITH CUBA, SUDAN, IRAN, NORTH KOREA OR MYANMAR, WHATSOEVER."}, {"category": "Others", "prohibition_text": "THIRD PARTY DOCUMENTS ARE NOT ALLOWED"}]"""
+    #json_text = """[{"category": "Boycott", "prohibition_text": "SHIPMENT AND TRANSHIPMENT ON ISRAELI FLAG VESSEL / AIR CRAFT, SEA PORTS / AIRPORT IS NOT ALLOWED AND A CERTIFICATE ISSUED BY THE SHIPPING COMPANY OR THEIR AUTHORISE AGENT TO THIS EFFECT MUST ACCOMPANY THE ORIGINAL DOCUMENTS"}, {"category": "Boycott", "prohibition_text": "SHIPMENT THROUGH ISRAELI FLAG VESSEL IS PROHIBITED"}, {"category": "Sanction", "prohibition_text": "IBM INDIA BANK COMPLIES WITH THE INTERNATIONAL SANCTION LAWS, RESOLUTIONS AND REGULATIONS ISSUED BY THE EUROPEAN UNION, THE UNITED NATIONS AND THE UNITED STATES OF AMERICA (AS WELL AS LOCAL LAWS AND REGULATIONS GOVERNING THE ISSUING BANK). IT IS BANK POLICY TO UNDERTAKE NO OBLIGATION, UNLESS IBM INDIA BANK HAS PROVIDED ITS EXPLICIT APPROVAL PRIOR TO COMMENCEMENT OF SUCH TRANSACTION, TO MAKE ANY PAYMENT UNDER, OR OTHERWISE TO IMPLEMENT, THIS LETTER OF CREDIT (INCLUDING BUT NOT LIMITED TO PROCESSING DOCUMENTS OR ADVISING THE LETTER OF CREDIT), IF THERE IS INVOLVEMENT BY ANY PERSON, ENTITY OR BODY LISTED IN THE EU, UN, USA OR LOCAL SANCTIONS LISTS GOVERNING THE ISSUING BANK, OR ANY INVOLVEMENT BY OR NEXUS WITH CUBA, SUDAN, IRAN, NORTH KOREA OR MYANMAR, WHATSOEVER."}, {"category": "Others", "prohibition_text": "THIRD PARTY DOCUMENTS ARE NOT ALLOWED"}]"""
 
     #print(f" add to list : {json_text}")
 
@@ -110,7 +134,7 @@ def run_prompt(p_txt:str,p_context:str,category:str="NA"):
 
     llm_ollama = ChatOllama(
         model="phi4:14b",
-        base_url="https://ollama-route-v3-v-sharp.apps.clusterocpvirtoci.ocpociibm.com/",
+        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434",
         temperature=0.2,
         streaming=False  # 🔒 ensures response is complete, not streamed    
     )
@@ -124,11 +148,14 @@ def run_prompt(p_txt:str,p_context:str,category:str="NA"):
     if generated_response:
         if category in prohibitions:
             response_json = filter_response(generated_response,"[", "]")
-            dict_ptext = add_to_list(response_json,category)
+            cleaned = response_json.encode('utf-8').decode('unicode_escape')  # unescape the \n and \" etc.
+            #parsed = json.loads(cleaned)
+            dict_ptext = add_to_list(cleaned,category)
             response_j1 = dict_ptext
         else: 
             response_json = filter_response(generated_response,"{", "}")
-            response_j1  = json.loads(response_json)
+            cleaned = response_json.encode('utf-8').decode('unicode_escape')
+            response_j1  = json.loads(cleaned)
 
        
         logger.debug(f" Json loaded Type { type(response_j1)} ")
@@ -144,7 +171,9 @@ def add_to_list(json_text:json,category:str):
     print(f" add to list : {json_text}")
 
     prohibitions = ["sanction","boycott"]
-    response_j = json.loads(json_text)
+    json_t = json.dumps(json_text,indent=4)
+    response_j = json.loads(json_t)
+    print(f" response_j {response_j}")
     list_ptext = []
     dict_p_text = {}
     if category in prohibitions:
@@ -163,7 +192,7 @@ def add_to_list(json_text:json,category:str):
 
 
 def filter_response(raw_response_json, startch, endch):
-    raw_response_json = raw_response_json.strip()
+    raw_response_json = raw_response_json
     try:
         start_ind = raw_response_json.index(startch)
         end_ind = raw_response_json.find(endch,start_ind+1)
@@ -174,49 +203,33 @@ def filter_response(raw_response_json, startch, endch):
 
 if __name__ == "__main__":
     sample_swift_input = ""
-    sample_lc_file = os.path.join("resources", "sample_lc.txt")
+    sample_lc_file = os.path.join("resources", "sample_lc.json")
     p_text = "Question: What are the prohibitions related to international trade finance that are mentioned in provided text?  . \n List all the prohibitions one by one without repeating and caegorize the same as 'Boycott', 'Sanction' or 'Others'. \n Return  response as a valid structured JSON Only with 'category' and 'prohibition_text' (WITHOUT ANY CHANGES TO ORIGINAL TEXT OR ANY SPELLING CORRECTIONS) for each prohibition. DO NOT ADD ANY OTHER DETAILS OF YOUR OWN. In case of no prohibitions are found return blank response.\n"
 
     response = """{
-    "content": "```json\n[\n  {\n    \"category\": \"Boycott\",\n    \"prohibition_text\": \"SHIPMENT AND TRANSHIPMENT ON ISRAELI FLAG VESSEL / AIR CRAFT, SEA PORTS / AIRPORT IS NOT ALLOWED AND A CERTIFICATE ISSUED BY THE SHIPPING COMPANY OR THEIR AUTHORISE AGENT TO THIS EFFECT MUST ACCOMPANY THE ORIGINAL DOCUMENTS\"\n  },\n  {\n    \"category\": \"Boycott\",\n    \"prohibition_text\": \"SHIPMENT THROUGH ISRAELI FLAG VESSEL IS PROHIBITED\"\n  },\n  {\n    \"category\": \"Sanction\",\n    \"prohibition_text\": \"IBM INDIA BANK COMPLIES WITH THE INTERNATIONAL SANCTION LAWS, RESOLUTIONS AND REGULATIONS ISSUED BY THE EUROPEAN UNION, THE UNITED NATIONS AND THE UNITED STATES OF AMERICA (AS WELL AS LOCAL LAWS AND REGULATIONS GOVERNING THE ISSUING BANK). IT IS BANK POLICY TO UNDERTAKE NO OBLIGATION, UNLESS IBM INDIA BANK HAS PROVIDED ITS EXPLICIT APPROVAL PRIOR TO COMMENCEMENT OF SUCH TRANSACTION, TO MAKE ANY PAYMENT UNDER, OR OTHERWISE TO IMPLEMENT, THIS LETTER OF CREDIT (INCLUDING BUT NOT LIMITED TO PROCESSING DOCUMENTS OR ADVISING THE LETTER OF CREDIT), IF THERE IS INVOLVEMENT BY ANY PERSON, ENTITY OR BODY LISTED IN THE EU, UN, USA OR LOCAL SANCTIONS LISTS GOVERNING THE ISSUING BANK, OR ANY INVOLVEMENT BY OR NEXUS WITH CUBA, SUDAN, IRAN, NORTH KOREA OR MYANMAR, WHATSOEVER.\"\n  },\n  {\n    \"category\": \"Others\",\n    \"prohibition_text\": \"THIRD PARTY DOCUMENTS ARE NOT ALLOWED\"\n  }\n]\n```",
-    "additional_kwargs": {},
-    "response_metadata": {
-        "token_usage": {
-            "prompt_tokens": 950,
-            "total_tokens": 1479,
-            "completion_tokens": 529
-        },
-        "model_name": "mistral-large-latest",
-        "model": "mistral-large-latest",
-        "finish_reason": "stop"
-    },
-    "type": "ai",
-    "name": null,
-    "id": "run--3bc233d8-91c7-4a95-92bb-de2e6dabee40-0",
-    "example": false,
-    "tool_calls": [],
-    "invalid_tool_calls": [],
-    "usage_metadata": {
-        "input_tokens": 950,
-        "output_tokens": 529,
-        "total_tokens": 1479
-    }
-}
-"""
+    content='```json\n[\n {\n "category": "Sanction",\n "prohibition_text": "DUBAI BANK FOR INVESTMENT AND FOREIGN TRADE (AGENCY) MIGHT BE SUBJECT TO AND AFFECTED BY, SANCTIONS, WITH WHICH IT WILL COMPLY."\n },\n {\n "category": "Sanction",\n "prohibition_text": "AGENCY IS NOT REQUIRED TO PERFORM ANY OBLIGATION UNDER THIS CREDIT WHICH IT DETERMINES IN ITS ABSOLUTE DISCRETION WILL OR WOULD BE LIKELY TO, CONTRAVENE OR BREACH OF ANY SANCTION."\n },\n {\n "category": "Others",\n "prohibition_text": "THIRD PARTY DOCUMENTS ARE NOT ALLOWED"\n }\n]\n```' additional_kwargs={} response_metadata={'model': 'phi4:14b', 'created_at': '2025-07-28T17:49:22.036606909Z', 'done': True, 'done_reason': 'stop', 'total_duration': 41311717004, 'load_duration': 27656701, 'prompt_eval_count': 724, 'prompt_eval_duration': 24795241052, 'eval_count': 159, 'eval_duration': 16488078589, 'model_name': 'phi4:14b'}"""
 
     json_obj = json.dumps(response,indent=4)
     print(filter_response(json_obj,"[","]"))
     response_json = filter_response(json_obj,"[","]")
-    dict_ptext = add_to_list(response_json,"boycott")
-    response_j1 = dict_ptext
+    cleaned = response_json.encode('utf-8').decode('unicode_escape')  # unescape the \n and \" etc.
+    parsed = json.loads(cleaned)
+    print(parsed)
+    #response_json = json.loads(response_json)
+
+    for record in parsed:
+        print(record) 
+    dict_ptext = add_to_list(parsed,"sanction")
+    #response_j1 = dict_ptext
 
     print(dict_ptext)
 
-    # try:
-    #     with open(sample_lc_file, "r") as f:
-    #         sample_swift_input = f.read()
-    # except FileNotFoundError:
-    #     print(f"Error: The file '{sample_lc_file}' was not found.")
-    #     exit()
+    try:
+        with open(sample_lc_file, "r") as f:
+            sample_swift_input = f.read()
+        call_baoe_service(sample_lc_file,"sanction")
+    except FileNotFoundError:
+         print(f"Error: The file '{sample_lc_file}' was not found.")
+         #exit()
     # print(tag_prohibitions(p_context=sample_swift_input,category="boycott"))
 
