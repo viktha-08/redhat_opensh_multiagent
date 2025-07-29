@@ -7,11 +7,11 @@ from typing import TypedDict, List, Optional
 import lc_swft_to_json
 
 from logger_config import logger
-from prohibitions_handler import tag_prohibitions
+from prohibitions_handler import call_baoe_service
 # langchain libraries
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.outputs import Generation
-from langchain_ollama import ChatOllama
+from langchain_ollama import ChatOllama , OllamaLLM
 
 from langgraph.graph import StateGraph, END
 from langchain_core.output_parsers import StrOutputParser
@@ -33,7 +33,8 @@ def convert_to_json(swift_text: str) -> dict:
 def identify_prohibitions(context: str , catgory:str) -> str:
     """External service to check for boycott and sanction clauses."""
     
-    response  = tag_prohibitions(context,catgory)
+    response  = call_baoe_service(context,catgory)
+
     if response:
         return response
     else:
@@ -47,9 +48,9 @@ def evaluate_related_to_dns(goods_name: str) -> str:
     dns_prompt = "Goods Name : {goods_name} . Do a detailed analysis of the above Goods name with valid  sources to determine if it related to  Military , Non-military or Dual use type of Goods. Give a short description of the goods (prioritising military and dual use) in about 60-80 words.List top 3 primary uses ('top_uses') , Do not add any additional description. Generate a valid JSON with fields:  'is_related_to_defense': Boolean(true/false), 'usage_type': (Military/Dual Use/Non-Military) 'description': '' for the above goods name. Do Not generate any Explanation."
     template_dns = PromptTemplate(input_variables=["goods_name"], template=dns_prompt)
  #Create a non-streaming Ollama LLM instance
-    llm_ollama = ChatOllama(
+    llm_ollama = OllamaLLM(
         model="phi4:14b",
-        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434/api/generate",
+        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434",
         temperature=0.2,
         streaming=False  # 🔒 ensures response is complete, not streamed
     )
@@ -102,8 +103,8 @@ def prohibition_identification_agent(state: AgentState) -> dict:
 
     context_text = lc_data["LCDocumentRequired"] + " \n\n" + lc_data["LCAdditionalCondition"]
 
-    boycott_result = identify_prohibitions(context_text , "boycott")
-    sanction_result = identify_prohibitions(context_text , "sanction")
+    boycott_result = identify_prohibitions(lc_data , "boycott")
+    sanction_result = identify_prohibitions(lc_data , "sanction")
     return {"prohibition_results": [boycott_result, sanction_result]}
 
 def goods_details_extraction_agent(state: AgentState) -> dict:
@@ -111,9 +112,9 @@ def goods_details_extraction_agent(state: AgentState) -> dict:
     print("\n--- AGENT: Goods Details Extraction ---")
     lc_data = state["lc_json_data"]
     goods_description = lc_data["LCDescriptionOfGoods"]
-    llm_ollama = ChatOllama(
+    llm_ollama = OllamaLLM(
         model="phi4:14b",
-        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434/api/generate",
+        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434",
         temperature=0.2,
         streaming=False  # 🔒 ensures response is complete, not streamed
     )
@@ -148,9 +149,9 @@ def dns_evaluation_agent(state: AgentState) -> dict:
 
 #supervisor_llm = ChatMistralAI(model="mistral-large-latest", temperature=0.3)
 # Supervisor LLM 
-supervisor_llm = ChatOllama(
+supervisor_llm = OllamaLLM(
         model="phi4:14b",
-        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434/api/generate",
+        base_url="http://ollama-service-v3.v-sharp.svc.cluster.local:11434",
         temperature=0.2,
         streaming=False  # 🔒 ensures response is complete, not streamed
     )
