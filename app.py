@@ -44,11 +44,12 @@ def hello_world():
 def invoke_agentic_workflow():
 
     print(" INVOKE AHENT ")
-    payload_ = request.get_data()
-    print(f" PAYLOAD : {payload_}")
+    cleaned = request.get_data()
+    #cleaned = payload_.encode('utf-8').decode('unicode_escape')
+    print(f" PAYLOAD : {cleaned}")
 
     initial_state = {
-        "input_swift_text": payload_,
+        "input_swift_text": cleaned,
         "lc_json_data": None,
         "prohibition_results": None,
         "goods_details": None,
@@ -76,8 +77,7 @@ def invoke_agentic_workflow():
         response = app.response_class( response_data, status=200, mimetype='application/json')
         return response
 
-
-        
+       
     except ValueError as e:
         # Specifically catch the missing API key error from the workflow
         print(f"ValueError during workflow: {e}")
@@ -138,7 +138,7 @@ def call_llm():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True,host="0.0.0.0", port=8080)
 
 
 """ def main():
